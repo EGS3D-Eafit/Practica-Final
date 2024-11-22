@@ -4,11 +4,27 @@
 #include <string>
 #include <fstream>
 #include <string>
-#include "tao/pegtl.hpp"
+
+#define TAO_PEGTL_NAMESPACE mylib::pegtl
+
+#include <tao/pegtl.hpp>
+#include <tao/pegtl/contrib/analyze.hpp>
 
 using namespace std;
 
-namespace pegtl = tao::pegtl;
+namespace pegtl = TAO_PEGTL_NAMESPACE;
+
+struct Node {
+    Node* parent;
+    vector<Node*> children;
+    string value;
+
+    Node(string s) {
+        value = s;
+    }
+};
+
+Node* root;
 
 // Reglas básicas mas basicas que la concha de la lora
 // Ahora si enserio, estas son las reglas basicas de la gramatica libre de contexto
@@ -32,7 +48,7 @@ struct f_rule;// template de una F
 
 //aqui ya definiendolos porque necesitaba usar el T y F antes de ser definidos
 struct e_rule : pegtl::seq<t_rule, pegtl::star<pegtl::seq<pegtl::sor<plus_op, minus_op>, t_rule>>> {};
-//una T con o sin mas expresiones de tipo + -, no hecho de derivacion a izquierda por miedo a weonadas de bucles tonotos
+//una T con o sin mas expresiones de tipo + -, heco asi para evitar bucles tonotos
 struct t_rule : pegtl::seq<f_rule, pegtl::star<pegtl::seq<pegtl::sor<mul_op, div_op>, f_rule>>> {};
 //misma situacion aqui pero con F
 struct f_rule : pegtl::sor<pegtl::seq<open_paren, e_rule, close_paren>, identifier, number> {};
@@ -46,68 +62,41 @@ string remove_char(const string& str, char c) {
 
 template<typename Rule>
 struct action
-      : pegtl::nothing<Rule> {}; // accion sin reglas que no hace nada para casos de errores o demas
+      : pegtl::nothing<Rule> {};
 
-
-//accion que deberia de realizar el programa cuando compruebe que una parte de lo comprobado si cumple con la regla
-//como estaba probando primero decidi hacerlo con couts y luego pasarlo a una estructura mas compleja como nodos o un vector
-//para graficar comodamente en QT
 template<>
 struct action<e_rule> {
-    static void apply(const string & s) {
-        if(s.size() > 1) {
-            string curDer = "E -> E ";
-            string r = remove_char(s,' ');
-
-            for(int i = 1; i < s.size(); i+=2) {
-                curDer += s.at(i) + " T ";
-            }
-
-            cout << curDer << endl;
-            return;
-        }
-        cout << "E -> T" << endl;
+    template< typename input >
+    static void apply(const input & s) {
+        cout<< s.string() << "E" << endl;
     }
 };
 
 template<>
 struct action<t_rule> {
-    static void apply(const string & s) {
-        if(s.size() > 1) {
-            string curDer = "T -> T ";
-            string r = remove_char(s,' ');
 
-            for(int i = 1; i < s.size(); i+=2) {
-                curDer += s.at(i) + " F ";
-            }
-
-            cout << curDer << endl;
-            return;
-        }
-        cout << "T -> F" << endl;
+    template< typename input >
+    static void apply(const input & s) {
+        cout<< s.string() << "T" << endl;
     }
 };
 
 template<>
 struct action<f_rule> {
-    static void apply(const string & s) {
-        if(s.at(0) == '(') {
-            cout << "F -> (E)" << endl;
-            return;
-        }
-        cout << "F -> "<< s << endl;
+    template< typename input >
+    static void apply(const input & s) {
+        cout<< s.string() << "F" << endl;
     }
 };
 
-//una prueba que hice para ver si funcionaba pero no cambio nada
 struct grammar
-         : pegtl::must<f_rule, pegtl::eof > {};
+         : pegtl::must<pegtl::plus<e_rule>, pegtl::eof> {};
 
 int main()
 {
     //cout<<decode("A")<<endl;
-    string s = "4+2";
-    pegtl::string_input input(s, "input");
+    string s = "(3+4)+(y/3)+10";
+    pegtl::string_input input(s, "input")   ;
     pegtl::parse<grammar, action>(input);
     return 0;
 }
